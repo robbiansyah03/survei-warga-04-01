@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Survei Warga RT 04 RW.01 Desa Ciampea</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
+<style>
+  body { font-family: 'Inter', sans-serif; }
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 50; justify-content: center; align-items: center; }
+  .modal-box { background: white; padding: 1.5rem; border-radius: 0.75rem; max-width: 90%; text-align: center; }
+  #progressContainer { display: none; width: 100%; max-width: 300px; background-color: #e0e0e0; border-radius: 5px; margin: 10px auto; }
+  #progressBar { width: 0%; height: 20px; background-color: #3b82f6; border-radius: 5px; text-align: center; color: white; font-size: 12px; line-height: 20px;}
+</style>
+</head>
+<body class="bg-gradient-to-b from-blue-100 to-blue-50 min-h-screen flex flex-col items-center">
+
+<header class="text-center mt-12 px-4">
+  <h1 class="text-4xl font-extrabold text-blue-900 mb-2">Survei Warga RT 04 RW.01</h1>
+  <h2 class="text-2xl font-semibold text-blue-700 mb-4">DESA CIAMPEA</h2>
+  <p class="text-blue-800 text-lg">Bersama membangun lingkungan yang lebih baik</p>
+</header>
+
+<section class="bg-white shadow-lg rounded-xl p-6 mt-8 max-w-md w-full text-center">
+  <h3 class="text-xl font-bold mb-2 text-blue-900">Tentang Survei Ini</h3>
+  <p class="text-gray-700 mb-4">Survei ini bersifat anonim dan digunakan untuk evaluasi pelayanan RT 04/01.</p>
+
+  <div class="bg-blue-50 p-4 rounded-lg mb-4">
+    <h4 class="font-semibold mb-2">📌 Tujuan Survei</h4>
+    <ul class="list-disc list-inside text-gray-700 space-y-1">
+      <li>Evaluasi pelayanan RT</li>
+      <li>Mengumpulkan nama calon RT</li>
+      <li>Mengetahui aspirasi warga</li>
+      <li>Data aman & anonim</li>
+    </ul>
+  </div>
+
+  <!-- Input file KTP (disembunyikan) -->
+  <input type="file" id="ktp" accept="image/*" style="display:none" onchange="startOCR()"/>
+
+  <!-- Tombol lanjut -->
+  <button id="btnSambutan" class="bg-blue-600 text-white py-3 px-6 rounded-lg shadow-lg hover:bg-blue-700 transition-all" onclick="openDisclaimer()">Lanjutkan Survei</button>
+
+  <!-- Info scan KTP -->
+  <p id="infoScan" class="mt-4 text-center font-semibold text-blue-700 hidden">
+      Silakan scan/upload KTP Anda untuk melanjutkan proses survei...
+  </p>
+
+  <!-- Progress bar OCR -->
+  <div id="progressContainer">
+      <div id="progressBar">0%</div>
+  </div>
+</section>
+
+<!-- Poster Modal -->
+<div id="posterModal" class="modal-overlay flex">
+  <img src="Poster04.jpg" alt="Poster Survei" class="w-1/2 mx-auto rounded shadow-lg">
+  <button class="absolute top-4 right-4 bg-red-600 text-white py-1 px-3 rounded hover:bg-red-700" onclick="closePoster()">X</button>
+</div>
+
+<!-- Disclaimer Modal -->
+<div id="disclaimerModal" class="modal-overlay flex">
+  <div class="modal-box">
+    <h3>Disclaimer & Privasi</h3>
+        <p>
+            Survei ini bersifat <b>anonim</b>, <b>rahasia</b>, dan 
+            tidak bertujuan mengarahkan atau mendukung calon tertentu. 
+            Seluruh jawaban digunakan hanya untuk evaluasi pelayanan <b>RT 04 RW.01</b>
+            Desa Ciampea Kab. Bogor, dan aspirasi warga secara murni tanpa paksaan.
+        </p>
+
+        <p>
+            Dengan melanjutkan, Anda menyatakan bahwa Anda bersedia 
+            berpartisipasi secara sukarela dan memahami bahwa data Anda 
+            tidak dapat diidentifikasi secara pribadi.
+        </p>
+    <div class="flex justify-between mt-4">
+      <button class="bg-gray-400 text-white py-2 px-4 rounded hover:bg-gray-500" onclick="closeDisclaimer()">Batal</button>
+      <button class="bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700" onclick="confirmScanKTP()">Saya Setuju</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Reset semua kondisi
+  function resetAll(){
+    document.getElementById('infoScan').style.display = 'none';
+    document.getElementById('infoScan').innerText = "Silakan scan/upload KTP Anda untuk melanjutkan proses survei...";
+    document.getElementById('ktp').value = "";
+    document.getElementById('progressContainer').style.display = 'none';
+    document.getElementById('progressBar').style.width = "0%";
+    document.getElementById('progressBar').innerText = "0%";
+    closeDisclaimer();
+    closePoster();
+  }
+
+  // Poster muncul saat load
+  window.onload = function() {
+    resetAll(); // reset otomatis saat load halaman
+    document.getElementById('posterModal').style.display = 'flex';
+  }
+
+  function closePoster() { document.getElementById('posterModal').style.display = 'none'; }
+  function openDisclaimer() { document.getElementById('disclaimerModal').style.display = 'flex'; }
+  function closeDisclaimer() { document.getElementById('disclaimerModal').style.display = 'none'; }
+
+  const desaList = ["BOGOR","GEDONG"];
+  const rwrtTerbatas = ["003001","004001","004/001","003/001"];
+  const kodeAwalNIK = "320115";
+
+  // Konfirmasi tambahan sebelum scan KTP
+  function confirmScanKTP() {
+    closeDisclaimer();
+    const konfirmasi = confirm("Anda harus scan KTP untuk melanjutkan survei.\nApakah ingin melanjutkan?");
+    if(konfirmasi){
+      triggerKTPUpload();
+    } else {
+      alert("Proses dibatalkan. Semua kondisi direset.");
+      resetAll(); // reset ulang
+    }
+  }
+
+  // Trigger file upload
+  function triggerKTPUpload() {
+    document.getElementById('infoScan').style.display = 'block';
+    document.getElementById('infoScan').innerText = "Silakan Scan Anda untuk melanjutkan proses survei...";
+    document.getElementById('ktp').click();
+  }
+
+  // Proses OCR KTP
+  function startOCR() {
+    const ktpFile = document.getElementById("ktp").files[0];
+    if(!ktpFile){
+      alert("Silakan pilih file KTP terlebih dahulu!");
+      resetAll();
+      return;
+    }
+
+    document.getElementById('infoScan').innerText = "Sedang proses verifikasi, mohon tunggu...";
+    document.getElementById('progressContainer').style.display = 'block';
+    document.getElementById('progressBar').style.width = "0%";
+    document.getElementById('progressBar').innerText = "0%";
+
+    const reader = new FileReader();
+    reader.onload = function(){
+      Tesseract.recognize(reader.result, 'ind', {
+        logger: m => {
+          if(m.status === 'recognizing text'){
+            let progress = Math.floor(m.progress * 100);
+            document.getElementById('progressBar').style.width = progress + "%";
+            document.getElementById('progressBar').innerText = progress + "%";
+          }
+        }
+      })
+      .then(({ data: { text } }) => {
+        const textLower = text.toLowerCase();
+
+        // ID unik
+        let idValid = false;
+        const nikMatch = text.match(/\d{16}/);
+        if(nikMatch) idValid = (nikMatch[0].substring(0,6) === kodeAwalNIK);
+
+        // Desa
+        let desaValidAll = true;
+        for(const desa of desaList){
+          if(!textLower.includes(desa.toLowerCase())) desaValidAll = false;
+        }
+
+        // RT/RW
+        let rwrtValid = false;
+        const regex = /(\d{3})\/?(\d{3})/g;
+        let match;
+        while((match = regex.exec(text))!==null){
+          const combined = match[1]+match[2];
+          const original = match[0];
+          if(rwrtTerbatas.includes(combined) || rwrtTerbatas.includes(original)){
+            rwrtValid = true;
+            break;
+          }
+        }
+
+        if(idValid && desaValidAll && rwrtValid){
+          alert("Selamat, Anda lolos verifikasi! Lanjut ke survei.");
+          window.location.href = 'SV_04.html';
+        } else {
+          alert("Gagal..! Silahkan ulangi kembali.");
+          resetAll();
+        }
+
+      }).catch(err=>{
+        console.error(err);
+        alert("Maaf, Terjadi kesalahan saat memproses VERIFIKASI. Semua kondisi direset.");
+        resetAll();
+      });
+    }
+    reader.readAsDataURL(ktpFile);
+  }
+</script>
+
+</body>
+</html>
